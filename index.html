@@ -1,0 +1,1355 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>📚 儿童识字工作台</title>
+  <!-- Supabase JS Client -->
+  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+  <style>
+    :root {
+      --blue: #3b82f6; --purple: #8b5cf6; --green: #22c55e; --red: #ef4444;
+      --orange: #f97316; --gray: #64748b; --light: #f1f5f9; --dark: #1e293b;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { 
+      font-family: -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+      background: linear-gradient(135deg, #f0f9ff, #faf5ff);
+      min-height: 100vh;
+    }
+    
+    /* ===== 侧边栏布局 ===== */
+    .app { display: flex; min-height: 100vh; }
+    .sidebar {
+      width: 240px; background: white; box-shadow: 2px 0 12px rgba(0,0,0,0.06);
+      display: flex; flex-direction: column; position: fixed; height: 100vh; z-index: 100;
+    }
+    .sidebar-header {
+      background: linear-gradient(135deg, var(--blue), var(--purple));
+      padding: 24px 20px; color: white;
+    }
+    .sidebar-header h1 { font-size: 20px; font-weight: 700; }
+    .sidebar-header p { font-size: 13px; opacity: 0.85; margin-top: 4px; }
+    .nav-menu { flex: 1; padding: 16px 12px; }
+    .nav-item {
+      display: flex; align-items: center; gap: 10px; width: 100%;
+      padding: 12px 16px; margin-bottom: 4px; border: none; border-radius: 12px;
+      background: transparent; color: var(--gray); font-size: 15px; cursor: pointer;
+      transition: all 0.2s; text-align: left;
+    }
+    .nav-item:hover { background: var(--light); }
+    .nav-item.active {
+      background: linear-gradient(135deg, var(--blue), var(--purple)); color: white;
+      box-shadow: 0 4px 12px rgba(59,130,246,0.35);
+    }
+    .nav-item .icon { font-size: 20px; width: 24px; text-align: center; }
+    .sidebar-footer { padding: 16px; border-top: 1px solid #f1f5f9; text-align: center; color: #cbd5e1; font-size: 12px; }
+    
+    /* ===== 主内容区 ===== */
+    .main { flex: 1; margin-left: 240px; padding: 32px; max-width: 1200px; }
+    .page { display: none; animation: fadeIn 0.3s ease; }
+    .page.active { display: block; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+    
+    .page-title { font-size: 28px; font-weight: 700; color: var(--dark); margin-bottom: 6px; }
+    .page-subtitle { color: var(--gray); margin-bottom: 28px; }
+    
+    /* ===== 统计卡片 ===== */
+    .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 28px; }
+    .stat-card {
+      background: white; border-radius: 16px; padding: 20px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.04); transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .stat-card:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.08); }
+    .stat-card-header { display: flex; justify-content: space-between; align-items: flex-start; }
+    .stat-label { font-size: 14px; color: var(--gray); margin-bottom: 6px; }
+    .stat-value { font-size: 36px; font-weight: 800; color: var(--dark); }
+    .stat-unit { font-size: 14px; color: var(--gray); font-weight: 400; margin-left: 4px; }
+    .stat-sub { font-size: 12px; color: #94a3b8; margin-top: 6px; }
+    .stat-icon { 
+      width: 48px; height: 48px; border-radius: 14px; 
+      display: flex; align-items: center; justify-content: center; font-size: 24px;
+    }
+    
+    /* ===== 内容卡片 ===== */
+    .card {
+      background: white; border-radius: 18px; padding: 24px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.04); margin-bottom: 20px;
+    }
+    .card-title { font-size: 18px; font-weight: 600; color: var(--dark); margin-bottom: 16px; }
+    
+    /* ===== 按钮 ===== */
+    .btn {
+      padding: 12px 24px; border: none; border-radius: 12px; font-size: 15px;
+      font-weight: 600; cursor: pointer; transition: all 0.2s; display: inline-flex;
+      align-items: center; justify-content: center; gap: 8px;
+    }
+    .btn-primary { background: linear-gradient(135deg, var(--blue), var(--purple)); color: white; }
+    .btn-primary:hover { opacity: 0.9; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(59,130,246,0.35); }
+    .btn-success { background: var(--green); color: white; }
+    .btn-danger { background: var(--red); color: white; }
+    .btn-outline { 
+      background: white; border: 2px solid #e2e8f0; color: var(--gray);
+    }
+    .btn-outline:hover { border-color: var(--blue); color: var(--blue); }
+    .btn-full { width: 100%; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none !important; }
+    
+    /* ===== 输入框 ===== */
+    .input {
+      width: 100%; padding: 14px 16px; border: 2px solid #e2e8f0; border-radius: 12px;
+      font-size: 16px; transition: border-color 0.2s; outline: none;
+    }
+    .input:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(59,130,246,0.1); }
+    
+    /* ===== 标签 ===== */
+    .tag {
+      display: inline-flex; align-items: center; padding: 6px 14px; border-radius: 10px;
+      font-size: 15px; font-weight: 500; margin: 3px;
+    }
+    .tag-green { background: #dcfce7; color: #166534; }
+    .tag-orange { background: #ffedd5; color: #9a3412; }
+    .tag-red { background: #fee2e2; color: #991b1b; }
+    .tag-blue { background: #dbeafe; color: #1e40af; }
+    .tag-purple { background: #f3e8ff; color: #6b21a8; }
+    .tag-gray { background: #f1f5f9; color: #475569; }
+    
+    /* ===== 表格 ===== */
+    table { width: 100%; border-collapse: collapse; }
+    th { 
+      text-align: left; padding: 12px 16px; background: #f8fafc; 
+      font-size: 13px; font-weight: 600; color: var(--gray); border-bottom: 1px solid #e2e8f0;
+    }
+    td { padding: 12px 16px; border-bottom: 1px solid #f1f5f9; font-size: 15px; }
+    tr:hover td { background: #f8fafc; }
+    .char-cell { font-size: 24px; font-weight: 700; color: var(--dark); }
+    
+    /* ===== 快捷操作网格 ===== */
+    .quick-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 20px; }
+    .quick-btn {
+      display: flex; flex-direction: column; align-items: center; gap: 8px;
+      padding: 20px 12px; border: 2px solid transparent; border-radius: 16px;
+      background: white; cursor: pointer; transition: all 0.2s;
+    }
+    .quick-btn:hover { border-color: #e2e8f0; background: #f8fafc; }
+    .quick-btn .icon { font-size: 28px; }
+    .quick-btn .label { font-size: 14px; font-weight: 500; color: var(--dark); }
+    
+    /* ===== 汉字展示 ===== */
+    .char-display { text-align: center; padding: 24px; }
+    .big-char { font-size: 80px; font-weight: 900; color: var(--dark); }
+    
+    /* ===== 弹窗 ===== */
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+      display: none; align-items: center; justify-content: center; z-index: 1000;
+    }
+    .modal-overlay.show { display: flex; }
+    .modal {
+      background: white; border-radius: 20px; padding: 28px; width: 90%; max-width: 480px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.2); animation: modalIn 0.25s ease;
+    }
+    @keyframes modalIn { from { transform: scale(0.95); opacity: 0; } to { transform: none; opacity: 1; } }
+    .modal h2 { font-size: 22px; color: var(--dark); margin-bottom: 8px; }
+    .modal p { color: var(--gray); margin-bottom: 20px; font-size: 14px; }
+    .modal-actions { display: flex; gap: 12px; margin-top: 20px; }
+    .modal-actions .btn { flex: 1; }
+    
+    /* ===== 故事内容 ===== */
+    .story-content {
+      background: #fefce8; border-radius: 16px; padding: 32px;
+      font-size: 22px; line-height: 2; letter-spacing: 0.03em; color: #451a03;
+      margin-top: 20px;
+    }
+    .story-content p { margin-bottom: 16px; text-indent: 2em; }
+    
+    /* ===== 提示条 ===== */
+    .toast {
+      position: fixed; top: 20px; right: 20px; padding: 14px 24px;
+      border-radius: 12px; font-weight: 600; z-index: 2000;
+      animation: slideIn 0.3s ease; display: none;
+    }
+    .toast.show { display: block; }
+    .toast-success { background: var(--green); color: white; }
+    .toast-error { background: var(--red); color: white; }
+    .toast-info { background: var(--blue); color: white; }
+    
+    /* ===== 空状态 ===== */
+    .empty-state { text-align: center; padding: 48px 24px; color: #94a3b8; }
+    .empty-state .icon { font-size: 56px; margin-bottom: 12px; }
+    
+    /* ===== 两列布局 ===== */
+    .two-col { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; }
+    
+    /* ===== 连接状态指示器 ===== */
+    .connection-status {
+      position: fixed; top: 12px; right: 12px; padding: 6px 14px; border-radius: 20px;
+      font-size: 12px; font-weight: 600; z-index: 2000; display: flex; align-items: center; gap: 6px;
+    }
+    .connection-status.connected { background: #dcfce7; color: #166534; }
+    .connection-status.disconnected { background: #fee2e2; color: #991b1b; }
+    .connection-status.connecting { background: #fef3c7; color: #92400e; }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+    
+    /* ===== 配置面板 ===== */
+    .config-panel {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+      display: flex; align-items: center; justify-content: center; z-index: 3000;
+    }
+    .config-panel.hidden { display: none; }
+    .config-box {
+      background: white; border-radius: 20px; padding: 32px; width: 90%; max-width: 520px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    }
+    .config-box h2 { font-size: 22px; color: var(--dark); margin-bottom: 8px; }
+    .config-box > p { color: var(--gray); font-size: 14px; margin-bottom: 24px; }
+    .config-field { margin-bottom: 16px; }
+    .config-field label { display: block; font-weight: 500; color: var(--dark); margin-bottom: 6px; font-size: 14px; }
+    .config-field input { width: 100%; }
+    .config-field .hint { font-size: 12px; color: #94a3b8; margin-top: 4px; }
+    
+    /* ===== 响应式 ===== */
+    @media (max-width: 768px) {
+      .sidebar { width: 64px; } .sidebar-header h1, .sidebar-header p, .nav-item span, .sidebar-footer { display: none; }
+      .nav-item { justify-content: center; padding: 14px; } .nav-item .icon { font-size: 22px; }
+      .main { margin-left: 64px; padding: 20px; }
+      .stats-grid, .quick-grid { grid-template-columns: repeat(2, 1fr); }
+      .two-col { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- 连接状态 -->
+<div id="connection-status" class="connection-status connecting">
+  <span class="status-dot"></span>
+  <span id="connection-text">连接中...</span>
+</div>
+
+<!-- 配置面板（首次使用或未配置时显示） -->
+<div id="config-panel" class="config-panel">
+  <div class="config-box">
+    <h2>🔧 云端配置</h2>
+    <p>请输入你的 Supabase 连接信息（首次使用需要配置一次）</p>
+    <div class="config-field">
+      <label>Supabase URL</label>
+      <input class="input" id="cfg-url" placeholder="https://xxxxx.supabase.co">
+      <p class="hint">在 Supabase 项目设置 → API 中找到</p>
+    </div>
+    <div class="config-field">
+      <label>Anon Public Key (anon key)</label>
+      <input class="input" id="cfg-key" placeholder="eyJhbGciOi...">
+      <p class="hint">在 Supabase 项目设置 → API 中找到</p>
+    </div>
+    <div style="display:flex;gap:12px;margin-top:24px;">
+      <button class="btn btn-outline" onclick="document.getElementById('config-panel').classList.add('hidden')">取消</button>
+      <button class="btn btn-primary btn-full" onclick="saveConfig()">保存并连接</button>
+    </div>
+    <p style="margin-top:20px;padding-top:16px;border-top:1px solid #f1f5f9;font-size:13px;color:#94a3b8;">
+      💡 还没有 Supabase？<a href="https://supabase.com" target="_blank" style="color:var(--blue)">免费注册</a>，
+      创建项目后复制 URL 和 anon key 即可。
+      <br/><br/>
+      创建完项目后，需要在 SQL Editor 中执行初始化SQL（见下方按钮）：
+    </p>
+    <button class="btn btn-outline btn-full" style="margin-top:8px;font-size:13px;" onclick="showSqlGuide()">📋 查看初始化SQL</button>
+  </div>
+</div>
+
+<!-- SQL指南弹窗 -->
+<div id="sql-guide-modal" class="modal-overlay" onclick="if(event.target===this)this.classList.remove('show')">
+  <div class="modal" style="max-width:640px;max-height:80vh;overflow-y:auto;">
+    <h2>📋 Supabase 数据库初始化SQL</h2>
+    <p>在 Supabase 的 SQL Editor 中新建查询，粘贴以下全部内容并运行：</p>
+    <pre id="sql-content" style="background:#1e293b;color:#e2e8f0;padding:16px;border-radius:12px;font-size:12px;overflow-x:auto;white-space:pre-wrap;line-height:1.6;"></pre>
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="copySql()">📋 复制SQL</button>
+      <button class="btn btn-outline" onclick="document.getElementById('sql-guide-modal').classList.remove('show')">关闭</button>
+    </div>
+  </div>
+</div>
+
+<!-- 提示条 -->
+<div id="toast" class="toast"></div>
+
+<div class="app">
+  <!-- 侧边栏 -->
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <h1>📚 识字工作台</h1>
+      <p>儿童个性化阅读复习 · 云端版</p>
+    </div>
+    <nav class="nav-menu">
+      <button class="nav-item active" data-page="dashboard" onclick="showPage('dashboard')">
+        <span class="icon">🏠</span><span>首页仪表盘</span>
+      </button>
+      <button class="nav-item" data-page="characters" onclick="showPage('characters')">
+        <span class="icon">📝</span><span>汉字库管理</span>
+      </button>
+      <button class="nav-item" data-page="history" onclick="showPage('history')">
+        <span class="icon">📖</span><span>阅读历史</span>
+      </button>
+      <button class="nav-item" data-page="settings" onclick="showPage('settings')">
+        <span class="icon">⚙️</span><span>设置</span>
+      </button>
+    </nav>
+    <div style="padding:12px;">
+      <button class="btn btn-outline btn-full" style="font-size:12px;padding:8px;" onclick="showConfigPanel()">🔧 云端配置</button>
+    </div>
+    <div class="sidebar-footer">v2.0 Cloud</div>
+  </aside>
+
+  <!-- 主内容区 -->
+  <main class="main">
+    
+    <!-- ========== 首页仪表盘 ========== -->
+    <div id="page-dashboard" class="page active">
+      <h1 class="page-title">孩子的识字成长</h1>
+      <p class="page-subtitle">跟踪学习进度，生成个性化阅读故事 · 数据实时同步云端</p>
+      
+      <!-- 统计卡片 -->
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-card-header">
+            <div>
+              <div class="stat-label">当前识字量</div>
+              <div><span class="stat-value" id="stat-total">0</span><span class="stat-unit">字</span></div>
+              <div class="stat-sub" id="stat-month-delta">较上月 +0 字</div>
+            </div>
+            <div class="stat-icon" style="background:linear-gradient(135deg,#3b82f6,#60a5fa)">📚</div>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card-header">
+            <div>
+              <div class="stat-label">稳定掌握</div>
+              <div><span class="stat-value" id="stat-mastered">0</span><span class="stat-unit">字</span></div>
+              <div class="stat-sub" id="stat-mastered-pct">占比 0%</div>
+            </div>
+            <div class="stat-icon" style="background:linear-gradient(135deg,#22c55e,#4ade80)">✅</div>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card-header">
+            <div>
+              <div class="stat-label">重点巩固</div>
+              <div><span class="stat-value" id="stat-review">0</span><span class="stat-unit">字</span></div>
+              <div class="stat-sub">需要重点复习</div>
+            </div>
+            <div class="stat-icon" style="background:linear-gradient(135deg,#f97316,#fbb24d)">⭐</div>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card-header">
+            <div>
+              <div class="stat-label">本月阅读</div>
+              <div><span class="stat-value" id="stat-days">0</span><span class="stat-unit">天</span></div>
+              <div class="stat-sub" id="stat-time">累计 0 分钟</div>
+            </div>
+            <div class="stat-icon" style="background:linear-gradient(135deg,#8b5cf6,#a78bfa)">📖</div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="two-col">
+        <!-- 左侧 -->
+        <div>
+          <!-- 今日阅读 -->
+          <div class="card">
+            <h2 class="card-title">📖 今日阅读</h2>
+            <div style="display:flex;gap:16px;margin-bottom:16px;color:var(--gray);font-size:14px;">
+              <span>阅读目标：<strong id="setting-target-time">10</strong>分钟</span>
+              <span>建议文章：<strong id="setting-word-count">500-600</strong>字</span>
+            </div>
+            <button class="btn btn-primary btn-full" id="btn-generate" onclick="generateStory()">
+              🎯 生成今日故事
+            </button>
+            
+            <!-- 故事输出区域 -->
+            <div id="story-output" style="display:none;margin-top:20px;border-top:1px solid #e2e8f0;padding-top:20px;">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+                <h3 style="font-weight:600;color:var(--dark)">生成的故事</h3>
+                <button class="btn btn-outline" style="padding:8px 16px;font-size:13px;" onclick="openReader()">进入阅读模式 →</button>
+              </div>
+              <div class="story-content" id="story-text"></div>
+            </div>
+          </div>
+          
+          <!-- 快捷操作 -->
+          <div class="card">
+            <h2 class="card-title">⚡ 快捷操作</h2>
+            <div class="quick-grid">
+              <button class="quick-btn" onclick="openAddModal()">
+                <span class="icon">➕</span><span class="label">添加新字</span>
+              </button>
+              <button class="quick-btn" onclick="openForgetModal()">
+                <span class="icon">↻</span><span class="label">记录遗忘</span>
+              </button>
+              <button class="quick-btn" onclick="showPage('characters')">
+                <span class="icon">📝</span><span class="label">我的字库</span>
+              </button>
+              <button class="quick-btn" onclick="showPage('history')">
+                <span class="icon">📊</span><span class="label">成长记录</span>
+              </button>
+            </div>
+            
+            <!-- 添加新字表单（内联展开） -->
+            <div id="add-char-form" style="display:none;margin-top:16px;padding:16px;background:#eff6ff;border-radius:12px;">
+              <label style="display:block;font-size:14px;font-weight:500;color:var(--dark);margin-bottom:8px;">输入新认识的汉字（可一次输入多个）</label>
+              <div style="display:flex;gap:8px;">
+                <input class="input" id="new-chars-input" placeholder="例如：媚 袋 蹦" onkeydown="if(event.key==='Enter')addChars()">
+                <button class="btn btn-primary" onclick="addChars()">添加</button>
+              </div>
+              <div id="add-result" style="margin-top:8px;font-size:14px;"></div>
+            </div>
+            
+            <!-- 记录遗忘表单（内联展开） -->
+            <div id="forget-form" style="display:none;margin-top:16px;padding:16px;background:#fef2f2;border-radius:12px;">
+              <label style="display:block;font-size:14px;font-weight:500;color:var(--dark);margin-bottom:8px;">输入孩子忘记的汉字</label>
+              <div style="display:flex;gap:8px;">
+                <input class="input" id="forget-input" placeholder="例如：轰、隆" onkeydown="if(event.key==='Enter')recordForget()">
+                <button class="btn btn-danger" onclick="recordForget()">记录</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- 右侧：今日重点 -->
+        <div>
+          <div class="card">
+            <h3 style="font-weight:600;color:var(--dark);margin-bottom:12px;display:flex;align-items:center;gap:8px;">
+              <span style="width:8px;height:8px;background:var(--green);border-radius:50%;"></span>新认识
+            </h3>
+            <div id="new-chars-list"><p style="color:#94a3b8;font-size:14px;">暂无新认识字</p></div>
+          </div>
+          
+          <div class="card">
+            <h3 style="font-weight:600;color:var(--dark);margin-bottom:12px;display:flex;align-items:center;gap:8px;">
+              <span style="width:8px;height:8px;background:var(--orange);border-radius:50%;"></span>重点复习
+            </h3>
+            <div id="forgot-chars-list"><p style="color:#94a3b8;font-size:14px;">暂无遗忘字，继续保持！</p></div>
+          </div>
+          
+          <div class="card" style="background:linear-gradient(135deg,#eff6ff,#f5f3ff);">
+            <h3 style="font-weight:600;color:var(--dark);margin-bottom:8px;">💡 今日提示</h3>
+            <p id="daily-tip" style="color:var(--gray);font-size:14px;line-height:1.7;">开始今天的阅读之旅吧！点击"生成今日故事"按钮</p>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- ========== 汉字库管理 ========== -->
+    <div id="page-characters" class="page">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;">
+        <div>
+          <h1 class="page-title" style="margin-bottom:4px;">📝 汉字库管理</h1>
+          <p style="color:var(--gray);">共 <strong id="char-total-count">0</strong> 个汉字 · 云端实时同步</p>
+        </div>
+        <div style="display:flex;gap:10px;">
+          <button class="btn btn-outline" onclick="openImportModal()">📥 批量导入</button>
+          <button class="btn btn-primary" onclick="openAddModal()">➕ 添加新字</button>
+        </div>
+      </div>
+      
+      <div style="display:flex;gap:12px;margin-bottom:20px;">
+        <input class="input" id="search-char" placeholder="搜索汉字..." style="max-width:260px;" oninput="filterChars()">
+        <select class="input" id="filter-status" style="max-width:160px;" onchange="filterChars()">
+          <option value="all">全部状态</option>
+          <option value="新认识">新认识</option>
+          <option value="初步掌握">初步掌握</option>
+          <option value="稳定掌握">稳定掌握</option>
+          <option value="容易遗忘">容易遗忘</option>
+          <option value="重点巩固">重点巩固</option>
+        </select>
+      </div>
+      
+      <div class="two-col" style="grid-template-columns:2fr 1fr;">
+        <div class="card" style="padding:0;overflow:hidden;">
+          <div style="max-height:520px;overflow-y:auto;">
+            <table>
+              <thead><tr><th>汉字</th><th>状态</th><th>复现次数</th><th>遗忘次数</th><th>操作</th></tr></thead>
+              <tbody id="char-table-body">
+                <tr><td colspan="5" class="empty-state">加载中...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        
+        <div class="card" id="char-detail-panel">
+          <div class="empty-state">
+            <div class="icon">📝</div>
+            <p>点击左侧汉字查看详情</p>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- ========== 阅读历史 ========== -->
+    <div id="page-history" class="page">
+      <h1 class="page-title">📊 阅读成长记录</h1>
+      <p class="page-subtitle">查看阅读历史和识字量变化趋势 · 云端同步</p>
+      
+      <div class="stats-grid" style="margin-bottom:24px;">
+        <div class="stat-card">
+          <div style="display:flex;align-items:center;gap:12px;">
+            <span style="font-size:28px;">📅</span>
+            <div><div class="stat-label">总阅读天数</div><div class="stat-value" style="font-size:28px;" id="hist-total-days">0</div></div>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div style="display:flex;align-items:center;gap:12px;">
+            <span style="font-size:28px;">📖</span>
+            <div><div class="stat-label">总阅读次数</div><div class="stat-value" style="font-size:28px;" id="hist-total-sessions">0</div></div>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div style="display:flex;align-items:center;gap:12px;">
+            <span style="font-size:28px;">⏱️</span>
+            <div><div class="stat-label">累计阅读时间</div><div class="stat-value" style="font-size:28px;" id="hist-total-time">0</div><span class="stat-unit">分钟</span></div>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div style="display:flex;align-items:center;gap:12px;">
+            <span style="font-size:28px;">📈</span>
+            <div><div class="stat-label">平均每天</div><div class="stat-value" style="font-size:28px;" id="hist-avg-time">0</div><span class="stat-unit">分钟</span></div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="card" style="padding:0;overflow:hidden;">
+        <div style="padding:16px 20px;border-bottom:1px solid #f1f5f9;font-weight:600;color:var(--dark);">
+          📚 阅读历史
+        </div>
+        <div id="history-list" style="max-height:480px;overflow-y:auto;">
+          <div class="empty-state"><div class="icon">📖</div><p>加载中...</p></div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- ========== 设置 ========== -->
+    <div id="page-settings" class="page">
+      <h1 class="page-title">⚙️ 设置</h1>
+      <p class="page-subtitle">配置阅读参数和云端连接</p>
+      
+      <div class="card" style="max-width:560px;">
+        <h2 style="font-size:16px;font-weight:600;color:var(--dark);margin-bottom:16px;">🌐 云端连接</h2>
+        <div style="padding:12px 16px;background:#f0fdf4;border-radius:12px;margin-bottom:20px;display:flex;justify-content:space-between;align-items:center;">
+          <div>
+            <div style="font-weight:500;color:var(--dark);" id="setting-conn-status">未连接</div>
+            <div style="font-size:12px;color:#94a3b8;" id="setting-conn-url">-</div>
+          </div>
+          <button class="btn btn-outline" style="font-size:13px;" onclick="showConfigPanel()">修改配置</button>
+        </div>
+        
+        <h2 style="font-size:16px;font-weight:600;color:var(--dark);margin-bottom:16px;">📖 阅读参数</h2>
+        <div style="margin-bottom:20px;">
+          <label style="display:block;font-weight:500;color:var(--dark);margin-bottom:8px;">每日阅读目标（分钟）</label>
+          <input type="number" class="input" id="set-reading-time" value="10" min="1" max="120">
+        </div>
+        <div style="margin-bottom:20px;">
+          <label style="display:block;font-weight:500;color:var(--dark);margin-bottom:8px;">建议文章字数</label>
+          <select class="input" id="set-word-count">
+            <option value="300-400">短篇：300-400字</option>
+            <option value="400-600" selected>标准：400-600字</option>
+            <option value="600-800">较长：600-800字</option>
+            <option value="800-1000">长篇：800-1000字</option>
+          </select>
+        </div>
+        <div style="margin-bottom:20px;">
+          <label style="display:block;font-weight:500;color:var(--dark);margin-bottom:8px;">默认故事主题</label>
+          <input type="text" class="input" id="set-theme" placeholder="例如：恐龙、动物、太空、冒险...">
+          <p style="font-size:12px;color:#94a3b8;margin-top:4px;">留空则随机选择主题</p>
+        </div>
+        <button class="btn btn-primary btn-full" onclick="saveSettings()">保存设置</button>
+      </div>
+      
+      <div class="card" style="max-width:560px;margin-top:20px;background:#f8fafc;">
+        <h2 style="font-size:16px;font-weight:600;color:var(--dark);margin-bottom:8px;">关于本应用</h2>
+        <p style="color:var(--gray);font-size:14px;line-height:1.7;">
+          儿童个性化识字与阅读复习工作台 v2.0 Cloud<br/>
+          数据存储于 Supabase 云端，多设备实时同步。<br/>
+          帮助家长跟踪孩子的汉字学习进度，通过AI生成个性化阅读故事。
+        </p>
+      </div>
+    </div>
+    
+  </main>
+</div>
+
+<!-- 添加新字弹窗 -->
+<div class="modal-overlay" id="modal-add">
+  <div class="modal">
+    <h2>➕ 添加新字</h2>
+    <p>可以一次输入多个汉字，系统会自动拆分并同步到云端</p>
+    <input class="input" id="modal-add-input" placeholder="例如：媚 袋 蹦 轰 隆" onkeydown="if(event.key==='Enter')modalAddChars()">
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closeModal('modal-add')">取消</button>
+      <button class="btn btn-primary" onclick="modalAddChars()">确认添加</button>
+    </div>
+  </div>
+</div>
+
+<!-- 批量导入弹窗 -->
+<div class="modal-overlay" id="modal-import">
+  <div class="modal">
+    <h2>📥 批量导入汉字</h2>
+    <p>粘贴包含大量汉字的文本，系统会自动提取所有汉字并去重后上传云端</p>
+    <textarea class="input" id="modal-import-text" rows="6" placeholder="在此粘贴文本..." style="resize:none;"></textarea>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closeModal('modal-import')">取消</button>
+      <button class="btn btn-success" onclick="importChars()">开始导入</button>
+    </div>
+  </div>
+</div>
+
+<!-- 阅读完成弹窗 -->
+<div class="modal-overlay" id="modal-complete">
+  <div class="modal">
+    <h2>🎉 完成今天的阅读！</h2>
+    <p>太棒了！请记录一下今天的情况：</p>
+    <div style="margin-bottom:16px;">
+      <label style="display:block;font-weight:500;color:var(--dark);margin-bottom:8px;">阅读时间（分钟）</label>
+      <input type="number" class="input" id="complete-time" value="10" min="1" max="120">
+    </div>
+    <div style="margin-bottom:16px;">
+      <label style="display:block;font-weight:500;color:var(--dark);margin-bottom:8px;">有不认识或忘记的字吗？</label>
+      <input class="input" id="complete-forget" placeholder="例如：轰、隆（没有就留空）">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closeModal('modal-complete')">继续阅读</button>
+      <button class="btn btn-success" onclick="completeReading()">确认完成</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ==================== 初始化SQL ====================
+const INIT_SQL = `-- ============================================
+--   儿童识字工作台 - Supabase 数据库初始化SQL
+--   在 Supabase SQL Editor 中运行此脚本
+-- ============================================
+
+-- 1. 汉字表
+CREATE TABLE IF NOT EXISTS characters (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  char TEXT NOT NULL UNIQUE,
+  status TEXT NOT NULL DEFAULT '新认识',
+  first_learned DATE,
+  review_count INTEGER DEFAULT 0,
+  forget_count INTEGER DEFAULT 0,
+  consecutive_correct INTEGER DEFAULT 0,
+  last_review DATE,
+  last_correct DATE,
+  last_forget DATE,
+  target_words TEXT[] DEFAULT '{}',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 2. 阅读记录表
+CREATE TABLE IF NOT EXISTS reading_sessions (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  title TEXT,
+  session_date DATE NOT NULL,
+  reading_time INTEGER DEFAULT 0,
+  word_count INTEGER DEFAULT 0,
+  new_chars TEXT[] DEFAULT '{}',
+  forget_chars TEXT[] DEFAULT '{}',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 3. 遗忘事件表
+CREATE TABLE IF NOT EXISTS forget_events (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  char TEXT NOT NULL,
+  event_date TIMESTAMPTZ DEFAULT NOW(),
+  count INTEGER DEFAULT 1,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 4. 设置表（单行）
+CREATE TABLE IF NOT EXISTS app_settings (
+  id INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+  reading_time TEXT DEFAULT '10',
+  word_count TEXT DEFAULT '500-600',
+  theme TEXT DEFAULT '',
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 5. 当前故事（临时存储）
+CREATE TABLE IF NOT EXISTS current_story (
+  id INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+  title TEXT,
+  content TEXT,
+  word_count INTEGER DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 插入默认设置（如果不存在）
+INSERT INTO app_settings (id, reading_time, word_count, theme)
+VALUES (1, '10', '500-600', '')
+ON CONFLICT (id) DO NOTHING;
+
+-- 启用 RLS (Row Level Security)
+ALTER TABLE characters ENABLE ROW LEVEL SECURITY;
+ALTER TABLE reading_sessions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE forget_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE app_settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE current_story ENABLE ROW LEVEL SECURITY;
+
+-- 允许匿名访问（公开应用）
+CREATE POLICY "Allow anonymous read" ON characters FOR SELECT USING (true);
+CREATE POLICY "Allow anonymous insert" ON characters FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow anonymous update" ON characters FOR UPDATE USING (true);
+CREATE POLICY "Allow anonymous delete" ON characters FOR DELETE USING (true);
+
+CREATE POLICY "Allow anonymous read" ON reading_sessions FOR SELECT USING (true);
+CREATE POLICY "Allow anonymous insert" ON reading_sessions FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow anonymous update" ON reading_sessions FOR UPDATE USING (true);
+
+CREATE POLICY "Allow anonymous read" ON forget_events FOR SELECT USING (true);
+CREATE POLICY "Allow anonymous insert" ON forget_events FOR INSERT WITH CHECK (true);
+
+CREATE POLICY "Allow anonymous read" ON app_settings FOR SELECT USING (true);
+CREATE POLICY "Allow anonymous update" ON app_settings FOR UPDATE USING (true);
+
+CREATE POLICY "Allow anonymous read" ON current_story FOR SELECT USING (true);
+CREATE POLICY "Allow anonymous upsert" ON current_story FOR ALL USING (true) WITH CHECK (true);
+
+-- 创建索引优化查询
+CREATE INDEX IF NOT EXISTS idx_characters_char ON characters(char);
+CREATE INDEX IF NOT EXISTS idx_characters_status ON characters(status);
+CREATE INDEX IF NOT EXISTS idx_sessions_date ON reading_sessions(session_date);
+CREATE INDEX IF NOT EXISTS idx_forget_events_char ON forget_events(char);
+
+-- 完成！
+SELECT '数据库初始化完成！' AS status;`;
+
+// ==================== Supabase 客户端 ====================
+let supabase = null;
+let isConnected = false;
+
+function getConfig() {
+  return {
+    url: localStorage.getItem('supabase_url') || '',
+    key: localStorage.getItem('supabase_key') || ''
+  };
+}
+
+function saveConfigToLocal(url, key) {
+  localStorage.setItem('supabase_url', url);
+  localStorage.setItem('supabase_key', key);
+}
+
+function initSupabase() {
+  const cfg = getConfig();
+  if (!cfg.url || !cfg.key) {
+    showConfigPanel();
+    return false;
+  }
+  
+  try {
+    supabase = window.supabase.createClient(cfg.url, cfg.key);
+    return true;
+  } catch(e) {
+    console.error('Supabase init error:', e);
+    return false;
+  }
+}
+
+async function testConnection() {
+  if (!supabase) return false;
+  try {
+    const { data, error } = await supabase.from('app_settings').select('id').limit(1);
+    return !error;
+  } catch(e) {
+    return false;
+  }
+}
+
+function updateConnectionStatus(status, text) {
+  const el = document.getElementById('connection-status');
+  el.className = `connection-status ${status}`;
+  document.getElementById('connection-text').textContent = text;
+}
+
+function showConfigPanel() {
+  const cfg = getConfig();
+  document.getElementById('cfg-url').value = cfg.url;
+  document.getElementById('cfg-key').value = cfg.key;
+  document.getElementById('config-panel').classList.remove('hidden');
+}
+
+function showSqlGuide() {
+  document.getElementById('sql-content').textContent = INIT_SQL;
+  document.getElementById('sql-guide-modal').classList.add('show');
+}
+
+function copySql() {
+  navigator.clipboard.writeText(INIT_SQL).then(() => {
+    showToast('SQL已复制到剪贴板！');
+  }).catch(() => {
+    // fallback
+    const ta = document.createElement('textarea');
+    ta.value = INIT_SQL;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    showToast('SQL已复制到剪贴板！');
+  });
+}
+
+async function saveConfig() {
+  const url = document.getElementById('cfg-url').value.trim();
+  const key = document.getElementById('cfg-key').value.trim();
+  
+  if (!url || !key) {
+    showToast('请填写完整的URL和Key', 'error');
+    return;
+  }
+  
+  saveConfigToLocal(url, key);
+  
+  if (initSupabase()) {
+    updateConnectionStatus('connecting', '测试连接中...');
+    const ok = await testConnection();
+    if (ok) {
+      isConnected = true;
+      updateConnectionStatus('connected', '已连接');
+      document.getElementById('config-panel').classList.add('hidden');
+      showToast('云端连接成功！');
+      refreshDashboard();
+    } else {
+      updateConnectionStatus('disconnected', '连接失败');
+      showToast('连接失败，请检查URL和Key是否正确', 'error');
+    }
+  }
+}
+
+// ==================== 数据操作（Supabase） ====================
+async function loadCharacters() {
+  if (!supabase) return [];
+  const { data, error } = await supabase.from('characters').select('*').order('created_at', { ascending: true });
+  return data || [];
+}
+
+async function addCharacter(charData) {
+  if (!supabase) return null;
+  const { data, error } = await supabase.from('characters').insert([charData]).select().single();
+  if (error) console.error('addCharacter error:', error);
+  return data;
+}
+
+async function updateCharacter(id, updates) {
+  if (!supabase) return null;
+  const { data, error } = await supabase.from('characters').update({ ...updates, updated_at: new Date().toISOString() }).eq('id', id).select().single();
+  if (error) console.error('updateCharacter error:', error);
+  return data;
+}
+
+async function deleteCharacterById(id) {
+  if (!supabase) return;
+  const { error } = await supabase.from('characters').delete().eq('id', id);
+  if (error) console.error('deleteCharacter error:', error);
+}
+
+async function loadSessions() {
+  if (!supabase) return [];
+  const { data, error } = await supabase.from('reading_sessions').select('*').order('created_at', { ascending: false });
+  return data || [];
+}
+
+async function addSession(sessionData) {
+  if (!supabase) return null;
+  const { data, error } = await supabase.from('reading_sessions').insert([sessionData]).select().single();
+  if (error) console.error('addSession error:', error);
+  return data;
+}
+
+async function addForgetEvent(eventData) {
+  if (!supabase) return;
+  const { error } = await supabase.from('forget_events').insert([eventData]);
+  if (error) console.error('addForgetEvent error:', error);
+}
+
+async function loadSettings() {
+  if (!supabase) return { reading_time: '10', word_count: '500-600', theme: '' };
+  const { data } = await supabase.from('app_settings').select('*').eq('id', 1).single();
+  return data || { reading_time: '10', word_count: '500-600', theme: '' };
+}
+
+async function saveSettingsToDB(settings) {
+  if (!supabase) return;
+  const { error } = await supabase.from('app_settings').upsert({ id: 1, ...settings, updated_at: new Date().toISOString() });
+  if (error) console.error('saveSettings error:', error);
+}
+
+async function getCurrentStory() {
+  if (!supabase) return null;
+  const { data } = await supabase.from('current_story').select('*').eq('id', 1).single();
+  return data;
+}
+
+async function saveCurrentStory(story) {
+  if (!supabase) return;
+  const { error } = await supabase.from('current_story').upsert({ id: 1, ...story, created_at: new Date().toISOString() });
+  if (error) console.error('saveStory error:', error);
+}
+
+// ==================== 页面导航 ====================
+function showPage(pageId) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-' + pageId).classList.add('active');
+  document.querySelector(`.nav-item[data-page="${pageId}"]`)?.classList.add('active');
+  
+  if (pageId === 'dashboard') refreshDashboard();
+  if (pageId === 'characters') refreshCharTable();
+  if (pageId === 'history') refreshHistory();
+  if (pageId === 'settings') loadSettingsUI();
+}
+
+// ==================== Toast提示 ====================
+function showToast(msg, type='success') {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.className = `toast toast-${type} show`;
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// ==================== 弹窗控制 ====================
+function openModal(id) { document.getElementById(id).classList.add('show'); }
+function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+function openAddModal() { document.getElementById('modal-add-input').value = ''; openModal('modal-add'); }
+function openForgetModal() { document.getElementById('forget-form').style.display = document.getElementById('forget-form').style.display === 'none' ? 'block' : 'none'; }
+function openImportModal() { document.getElementById('modal-import-text').value = ''; openModal('modal-import'); }
+
+// ==================== 汉字操作 ====================
+async function addCharsToList(inputStr) {
+  const chars = inputStr.replace(/\s+/g, '').split('').filter(c => /[\u4e00-\u9fa5]/.test(c));
+  const existingChars = await loadCharacters();
+  const added = [], existed = [];
+  
+  for (const c of chars) {
+    const found = existingChars.find(x => x.char === c);
+    if (found) { existed.push(c); }
+    else {
+      await addCharacter({
+        char: c, status: '新认识', first_learned: new Date().toISOString().slice(0,10),
+        review_count: 0, forget_count: 0, consecutive_correct: 0,
+        last_review: null, last_correct: null, last_forget: null,
+        target_words: []
+      });
+      added.push(c);
+    }
+  }
+  return { added, existed };
+}
+
+async function addChars() {
+  const input = document.getElementById('new-chars-input').value;
+  if (!input.trim()) return;
+  const r = await addCharsToList(input);
+  let msg = '';
+  if (r.added.length) msg += `✅ 新增 ${r.added.length} 字：${r.added.join(' ')}`;
+  if (r.existed.length) msg += (msg ? '，' : '') + `${r.existed.length} 字已存在`;
+  showToast(msg || '没有有效汉字');
+  document.getElementById('new-chars-input').value = '';
+  document.getElementById('add-char-form').style.display = 'none';
+  refreshDashboard(); refreshCharTable();
+}
+
+async function modalAddChars() {
+  const input = document.getElementById('modal-add-input').value;
+  if (!input.trim()) return;
+  const r = await addCharsToList(input);
+  let msg = '';
+  if (r.added.length) msg += `✅ 新增 ${r.added.length} 字：${r.added.join(' ')}`;
+  if (r.existed.length) msg += (msg ? '，' : '') + `${r.existed.length} 字已存在`;
+  showToast(msg || '没有有效汉字');
+  closeModal('modal-add');
+  refreshDashboard(); refreshCharTable();
+}
+
+async function importChars() {
+  const text = document.getElementById('modal-import-text').value;
+  if (!text.trim()) return;
+  const r = await addCharsToList(text);
+  showToast(`导入完成：新增 ${r.added.length} 个，已存在 ${r.existed.length} 个`);
+  closeModal('modal-import');
+  refreshDashboard(); refreshCharTable();
+}
+
+async function recordForget() {
+  const input = document.getElementById('forget-input').value;
+  if (!input.trim()) return;
+  const chars = input.replace(/\s+/g,'').split('').filter(c => /[\u4e00-\u9fa5]/.test(c));
+  const allChars = await loadCharacters();
+  
+  for (const c of chars) {
+    const found = allChars.find(x => x.char === c);
+    if (found) {
+      const newFor getCount = (found.forget_count || 0) + 1;
+      const newStatus = newFor getCount >= 3 ? '容易遗忘' : (newFor getCount >= 1 ? '重点巩固' : found.status);
+      await updateCharacter(found.id, { 
+        forget_count: newFor getCount, 
+        consecutive_correct: 0, 
+        last_forget: new Date().toISOString().slice(0,10),
+        status: newStatus
+      });
+      await addForgetEvent({ char: c, count: newFor getCount });
+    } else {
+      await addCharacter({
+        char: c, status: '容易遗忘', first_learned: new Date().toISOString().slice(0,10),
+        review_count: 0, forget_count: 1, consecutive_correct: 0,
+        last_review: null, last_correct: null, last_forget: new Date().toISOString().slice(0,10),
+        target_words: []
+      });
+      await addForgetEvent({ char: c, count: 1 });
+    }
+  }
+  showToast(`已记录 ${chars.length} 个字的遗忘事件`, 'error');
+  document.getElementById('forget-input').value = '';
+  document.getElementById('forget-form').style.display = 'none';
+  refreshDashboard(); refreshCharTable();
+}
+
+async function deleteChar(char, id) {
+  if (!confirm(`确定要删除"${char}"吗？`)) return;
+  await deleteCharacterById(id);
+  showToast(`已删除"${char}"`);
+  refreshDashboard(); refreshCharTable();
+}
+
+// ==================== 仪表盘刷新 ====================
+async function refreshDashboard() {
+  if (!isConnected) return;
+  
+  const chars = await loadCharacters();
+  const total = chars.length;
+  const mastered = chars.filter(c => c.status === '稳定掌握').length;
+  const needReview = chars.filter(c => ['重点巩固','容易遗忘'].includes(c.status)).length;
+  
+  document.getElementById('stat-total').textContent = total;
+  document.getElementById('stat-mastered').textContent = mastered;
+  document.getElementById('stat-review').textContent = needReview;
+  document.getElementById('stat-mastered-pct').textContent = `占比 ${total > 0 ? Math.round(mastered/total*100) : 0}%`;
+  
+  // 本月统计
+  const thisMonth = new Date().toISOString().slice(0,7);
+  const sessions = await loadSessions();
+  const monthSessions = sessions.filter(s => s.session_date && s.session_date.startsWith(thisMonth));
+  const monthDays = new Set(monthSessions.map(s => s.session_date)).size;
+  const monthTime = monthSessions.reduce((sum,s) => sum + (s.reading_time||0), 0);
+  document.getElementById('stat-days').textContent = monthDays;
+  document.getElementById('stat-time').textContent = `累计 ${monthTime} 分钟`;
+  document.getElementById('stat-month-delta').textContent = `较上月 +${chars.filter(c => c.first_learned?.startsWith(thisMonth)).length} 字`;
+  
+  // 设置值
+  const settings = await loadSettings();
+  document.getElementById('setting-target-time').textContent = settings.reading_time || '10';
+  document.getElementById('setting-word-count').textContent = settings.word_count || '500-600';
+  
+  // 新认识字
+  const newChars = chars.filter(c => c.status === '新认识').slice(0, 8);
+  const ncEl = document.getElementById('new-chars-list');
+  if (newChars.length > 0) {
+    ncEl.innerHTML = newChars.map(c => `<span class="tag tag-green">${c.char}</span>`).join('');
+  } else {
+    ncEl.innerHTML = '<p style="color:#94a3b8;font-size:14px;">暂无新认识字</p>';
+  }
+  
+  // 遗忘字
+  const forgotChars = chars.filter(c => c.forget_count > 0).sort((a,b) => b.forget_count - a.forget_count).slice(0, 6);
+  const fcEl = document.getElementById('forgot-chars-list');
+  if (forgotChars.length > 0) {
+    fcEl.innerHTML = forgotChars.map(c => `<span class="tag tag-orange">${c.char}<small style="margin-left:4px;">×${c.forget_count}</small></span>`).join('');
+  } else {
+    fcEl.innerHTML = '<p style="color:#94a3b8;font-size:14px;">暂无遗忘字，继续保持！</p>';
+  }
+  
+  // 提示
+  const tipEl = document.getElementById('daily-tip');
+  if (newChars.length > 0) tipEl.textContent = `今天有 ${newChars.length} 个新字需要在故事中重点复现`;
+  else if (monthDays > 0) tipEl.textContent = `本月已坚持阅读 ${monthDays} 天，太棒了！`;
+  else tipEl.textContent = '开始今天的阅读之旅吧！点击"生成今日故事"按钮';
+  
+  document.getElementById('char-total-count').textContent = total;
+}
+
+// ==================== 汉字表格 ====================
+let allCharactersCache = [];
+
+async function refreshCharTable() {
+  if (!isConnected) return;
+  allCharactersCache = await loadCharacters();
+  filterChars();
+}
+
+function filterChars() {
+  const search = (document.getElementById('search-char')?.value || '').toLowerCase();
+  const statusFilter = document.getElementById('filter-status')?.value || 'all';
+  
+  let filtered = allCharactersCache;
+  if (search) filtered = filtered.filter(c => c.char.includes(search));
+  if (statusFilter !== 'all') filtered = filtered.filter(c => c.status === statusFilter);
+  
+  const tbody = document.getElementById('char-table-body');
+  if (filtered.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="5" class="empty-state">${search || statusFilter !== 'all' ? '没有找到匹配的汉字' : '汉字库为空，请先添加汉字'}</td></tr>`;
+    return;
+  }
+  
+  const statusClass = s => ({ '新认识':'tag-purple','初步掌握':'tag-blue','稳定掌握':'tag-green','容易遗忘':'tag-orange','重点巩固':'tag-red' }[s] || 'tag-gray');
+  
+  tbody.innerHTML = filtered.map(c => `
+    <tr onclick="showCharDetail('${c.char}', '${c.id}')">
+      <td class="char-cell">${c.char}</td>
+      <td><span class="tag ${statusClass(c.status)}">${c.status}</span></td>
+      <td>${c.review_count || 0}</td>
+      <td>${c.forget_count || 0}</td>
+      <td><button class="btn btn-outline" style="padding:4px 12px;font-size:12px;" onclick="event.stopPropagation();deleteChar('${c.char}', '${c.id}')">删除</button></td>
+    </tr>`).join('');
+}
+
+async function showCharDetail(char, id) {
+  const c = allCharactersCache.find(x => x.id === id);
+  if (!c) return;
+  
+  const panel = document.getElementById('char-detail-panel');
+  panel.innerHTML = `
+    <div class="char-display">
+      <div class="big-char">${c.char}</div>
+      <span class="tag ${({'新认识':'tag-purple','初步掌握':'tag-blue','稳定掌握':'tag-green','容易遗忘':'tag-orange','重点巩固':'tag-red'}[c.status]||'tag-gray')}" style="margin-top:12px;">${c.status}</span>
+    </div>
+    <div style="margin-top:20px;">
+      ${[
+        ['首次认识', c.first_learned || '-'],
+        ['最近复现', c.last_review || '-'],
+        ['最近正确', c.last_correct || '-'],
+        ['最近遗忘', c.last_forget || '-'],
+        ['复现次数', c.review_count || 0],
+        ['遗忘次数', c.forget_count || 0],
+        ['连续正确', c.consecutive_correct || 0]
+      ].map(([l,v]) => `<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f1f5f9;"><span style="color:var(--gray);font-size:13px;">${l}</span><span style="font-weight:500;">${v}</span></div>`).join('')}
+    </div>
+    <button class="btn btn-outline btn-full" style="margin-top:16px;" onclick="this.innerHTML=this.innerHTML.includes('编辑')?'✏️ 编辑目标词':'💾 保存';toggleTargetEdit('${c.id}')">✏️ 编辑目标词</button>
+    <div id="target-edit-area" style="display:none;margin-top:12px;">
+      <input class="input" id="target-words-input" placeholder="空格分隔，如：阳光明媚 明媚的阳光" value="${(c.target_words||[]).join(' ')}">
+      <button class="btn btn-primary btn-full" style="margin-top:8px;" onclick="saveTargetWords('${c.id}')">保存目标词</button>
+    </div>`;
+}
+
+function toggleTargetEdit(id) {
+  const el = document.getElementById('target-edit-area');
+  el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+
+async function saveTargetWords(id) {
+  const words = document.getElementById('target-words-input').value.split(/[\s,，、]+/).filter(w => w.trim());
+  await updateCharacter(id, { target_words: words });
+  showToast('目标词已保存');
+}
+
+// ==================== 故事生成 ====================
+async function generateStory() {
+  if (!isConnected) { showToast('请先连接云端', 'error'); return; }
+  
+  const btn = document.getElementById('btn-generate');
+  btn.disabled = true; btn.textContent = '✨ 故事生成中...';
+  
+  const chars = await loadCharacters();
+  const targetChars = chars.slice(0, 10).map(c => c.char);
+  const forgotChars = chars.filter(c => c.forget_count > 0).slice(0, 5).map(c => c.char);
+  const settings = await loadSettings();
+  
+  setTimeout(async () => {
+    const themes = ['小兔子采蘑菇','小熊的蜂蜜树','勇敢的小蚂蚁','星星的秘密','神奇的种子','小鱼历险记'];
+    const theme = settings.theme || themes[Math.floor(Math.random() * themes.length)];
+    
+    const story = generateStoryText(theme, [...targetChars, ...forgotChars]);
+    
+    await saveCurrentStory({ title: theme, content: story, word_count: story.replace(/\s/g,'').length });
+    
+    document.getElementById('story-text').innerHTML = story.split('\n').map(p => `<p>${p}</p>`).join('');
+    document.getElementById('story-output').style.display = 'block';
+    btn.disabled = false; btn.textContent = '🎯 生成今日故事';
+    showToast('故事生成成功！');
+  }, 1500);
+}
+
+function generateStoryText(theme, chars) {
+  const availableChars = chars.length > 0 ? chars : ['天','地','人','山','水','风','雨','花','草','树'];
+  const c1 = availableChars[0] || '小'; const c2 = availableChars[1] || '大';
+  const c3 = availableChars[2] || '好'; const c4 = availableChars[3] || '看';
+  const c5 = availableChars[4] || '走'; const c6 = availableChars[5] || '来';
+  
+  return `${theme}
+
+从前有一${c1}${c2}的小动物，它${c3}奇地${c4}着这个世界。一天早晨，太阳从东边升${c5}来，照${c6}了整${c1}森林。
+
+小动物决定出去探${c4}。它走${c5}过${c3}多有趣的地方：有高高的${c2}山，清清的河水，还有五颜六色的花朵。每到一个地方，它都会认${c6}新的朋友。
+
+在路上，它遇到了一只聪明的老${c2}猫。老猫告诉它："要想${c3}好本领，就要每天学${c5}习。"小动物听${c6}了，点点头说："我一定会努力的！"
+
+从那以后，小动物每天都认真学${c5}习新的知识。它学会了认${c4}方向，学会了帮助别人，还学会了很多很多汉字。
+
+慢慢地，小动物变成了森林里最有学问的小${c1}朋友。大家都${c3}欢跟它一起玩，因为它知道好多好多的故事。
+
+这个故事告诉我们：只要坚持学${c5}习，就一定能变${c3}得更加优秀！`;
+}
+
+async function openReader() {
+  const story = await getCurrentStory();
+  if (!story) { showToast('请先生成故事', 'error'); return; }
+  openModal('modal-complete');
+}
+
+async function completeReading() {
+  const time = parseInt(document.getElementById('complete-time').value) || 10;
+  const forgetInput = document.getElementById('complete-forget').value;
+  const chars = await loadCharacters();
+  const settings = await loadSettings();
+  
+  const session = {
+    title: (await getCurrentStory())?.title || '阅读故事',
+    session_date: new Date().toISOString().slice(0,10),
+    reading_time: time,
+    word_count: (await getCurrentStory())?.word_count || 0,
+    new_chars: chars.filter(c => c.status === '新认识').slice(-5).map(c => c.char),
+    forget_chars: forgetInput.replace(/\s+/g,'').split('').filter(c => /[\u4e00-\u9fa5]/.test(c))
+  };
+  
+  await addSession(session);
+  
+  // 更新汉字状态
+  for (const c of chars) {
+    if (session.new_chars.includes(c.char)) {
+      const newRC = (c.review_count || 0) + 1;
+      const newCC = (c.consecutive_correct || 0) + 1;
+      const newStatus = newCC >= 5 ? '稳定掌握' : (newCC >= 2 ? '初步掌握' : c.status);
+      await updateCharacter(c.id, {
+        review_count: newRC,
+        consecutive_correct: newCC,
+        last_review: session.session_date,
+        last_correct: session.session_date,
+        status: newStatus
+      });
+    }
+  }
+  
+  // 处理遗忘字
+  if (forgetInput.trim()) {
+    const fchars = forgetInput.replace(/\s+/g,'').split('').filter(c => /[\u4e00-\u9fa5]/.test(c));
+    for (const c of fchars) {
+      const found = chars.find(x => x.char === c);
+      if (found) {
+        const newFC = (found.forget_count || 0) + 1;
+        await updateCharacter(found.id, {
+          forget_count: newFC,
+          consecutive_correct: 0,
+          last_forget: session.session_date
+        });
+        await addForgetEvent({ char: c, count: newFC });
+      } else {
+        await addCharacter({
+          char:c, status:'容易遗忘', first_learned:session.session_date,
+          review_count:0, forget_count:1, consecutive_correct:0,
+          last_review:null, last_correct:null, last_forget:session.session_date,
+          target_words:[]
+        });
+        await addForgetEvent({ char: c, count: 1 });
+      }
+    }
+  }
+  
+  closeModal('modal-complete');
+  showToast(`🎉 阅读记录已保存！本次阅读 ${time} 分钟`);
+  document.getElementById('story-output').style.display = 'none';
+  document.getElementById('complete-forget').value = '';
+  refreshDashboard(); refreshHistory();
+}
+
+// ==================== 阅读历史 ====================
+async function refreshHistory() {
+  if (!isConnected) return;
+  const sessions = await loadSessions();
+  
+  const totalDays = new Set(sessions.map(s => s.session_date)).size;
+  const totalTime = sessions.reduce((s,x) => s + (x.reading_time||0), 0);
+  document.getElementById('hist-total-days').textContent = totalDays;
+  document.getElementById('hist-total-sessions').textContent = sessions.length;
+  document.getElementById('hist-total-time').textContent = totalTime;
+  document.getElementById('hist-avg-time').textContent = totalDays > 0 ? Math.round(totalTime/totalDays*10)/10 : 0;
+  
+  const listEl = document.getElementById('history-list');
+  if (sessions.length === 0) {
+    listEl.innerHTML = `<div class="empty-state"><div class="icon">📖</div><p>还没有阅读记录</p><p style="font-size:14px;margin-top:8px;">生成并完成第一次阅读后，记录会显示在这里</p></div>`;
+    return;
+  }
+  
+  listEl.innerHTML = sessions.map(s => {
+    const d = new Date(s.created_at);
+    const dateStr = `${d.getMonth()+1}月${d.getDate()}日 ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+    return `
+    <div style="padding:16px 20px;border-bottom:1px solid #f1f5f9;cursor:pointer;transition:background 0.2s;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background=''">
+      <div style="display:flex;justify-content:space-between;align-items:start;">
+        <div>
+          <div style="font-weight:600;color:var(--dark);">${s.title || '未命名故事'}</div>
+          <div style="color:var(--gray);font-size:13px;margin-top:4px;">
+            ${dateStr}${s.word_count ? ` · 约${s.word_count}字` : ''}${s.reading_time ? ` · ${s.reading_time}分钟` : ''}
+          </div>
+          <div style="display:flex;gap:12px;margin-top:8px;flex-wrap:wrap;">
+            ${s.new_chars?.length ? `<span style="font-size:12px;color:#7c3aed;">新字: ${s.new_chars.join('、')}</span>` : ''}
+            ${s.forget_chars?.length ? `<span style="font-size:12px;color:#dc2626;">遗忘: ${s.forget_chars.join('、')}</span>` : ''}
+          </div>
+        </div>
+        <span class="tag tag-blue" style="font-size:12px;">${s.reading_time || 0}分</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ==================== 设置 ====================
+async function loadSettingsUI() {
+  const settings = await loadSettings();
+  document.getElementById('set-reading-time').value = settings.reading_time || '10';
+  document.getElementById('set-word-count').value = settings.word_count || '500-600';
+  document.getElementById('set-theme').value = settings.theme || '';
+  
+  const cfg = getConfig();
+  document.getElementById('setting-conn-status').textContent = isConnected ? '已连接' : '未连接';
+  document.getElementById('setting-conn-url').textContent = cfg.url || '-';
+}
+
+async function saveSettings() {
+  const settings = {
+    reading_time: document.getElementById('set-reading-time').value,
+    word_count: document.getElementById('set-word-count').value,
+    theme: document.getElementById('set-theme').value
+  };
+  await saveSettingsToDB(settings);
+  showToast('✓ 设置已保存');
+  refreshDashboard();
+}
+
+// ==================== 初始化 ====================
+document.addEventListener('DOMContentLoaded', async () => {
+  if (initSupabase()) {
+    updateConnectionStatus('connecting', '测试连接中...');
+    const ok = await testConnection();
+    if (ok) {
+      isConnected = true;
+      updateConnectionStatus('connected', '已连接');
+      refreshDashboard();
+    } else {
+      updateConnectionStatus('disconnected', '连接失败');
+      showConfigPanel();
+    }
+  } else {
+    showConfigPanel();
+  }
+});
+</script>
+
+</body>
+</html>
