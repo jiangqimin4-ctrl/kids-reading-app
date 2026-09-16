@@ -820,8 +820,11 @@ async function saveConfig() {
       showToast('云端连接成功！');
       refreshDashboard();
     } else {
-      updateConnectionStatus('disconnected', '连接失败');
-      showToast('连接失败，请检查URL和Key是否正确', 'error');
+      // 表可能还没建，先保存配置，不阻塞用户
+      isConnected = false;
+      updateConnectionStatus('disconnected', '已保存（数据库表尚未创建）');
+      document.getElementById('config-panel').classList.add('hidden');
+      showToast('配置已保存！请先在Supabase SQL Editor中执行建表SQL', 'warning');
     }
   }
 }
