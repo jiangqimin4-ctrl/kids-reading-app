@@ -991,15 +991,15 @@ async function recordForget() {
   for (const c of chars) {
     const found = allChars.find(x => x.char === c);
     if (found) {
-      const newFor getCount = (found.forget_count || 0) + 1;
-      const newStatus = newFor getCount >= 3 ? '容易遗忘' : (newFor getCount >= 1 ? '重点巩固' : found.status);
+      const newForgetCount = (found.forget_count || 0) + 1;
+      const newStatus = newForgetCount >= 3 ? '容易遗忘' : (newForgetCount >= 1 ? '重点巩固' : found.status);
       await updateCharacter(found.id, { 
-        forget_count: newFor getCount, 
+        forget_count: newForgetCount, 
         consecutive_correct: 0, 
         last_forget: new Date().toISOString().slice(0,10),
         status: newStatus
       });
-      await addForgetEvent({ char: c, count: newFor getCount });
+      await addForgetEvent({ char: c, count: newForgetCount });
     } else {
       await addCharacter({
         char: c, status: '容易遗忘', first_learned: new Date().toISOString().slice(0,10),
