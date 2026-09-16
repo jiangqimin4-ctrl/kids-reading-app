@@ -725,7 +725,7 @@ CREATE INDEX IF NOT EXISTS idx_forget_events_char ON forget_events(char);
 SELECT '数据库初始化完成！' AS status;`;
 
 // ==================== Supabase 客户端 ====================
-let supabase = null;
+let sbClient = null;
 let isConnected = false;
 
 function getConfig() {
@@ -748,7 +748,7 @@ function initSupabase() {
   }
   
   try {
-    supabase = window.supabase.createClient(cfg.url, cfg.key);
+    sbClient = window.supabase.createClient(cfg.url, cfg.key);
     return true;
   } catch(e) {
     console.error('Supabase init error:', e);
@@ -757,9 +757,9 @@ function initSupabase() {
 }
 
 async function testConnection() {
-  if (!supabase) return false;
+  if (!sbClient) return false;
   try {
-    const { data, error } = await supabase.from('app_settings').select('id').limit(1);
+    const { data, error } = await sbClient.from('app_settings').select('id').limit(1);
     return !error;
   } catch(e) {
     return false;
@@ -831,71 +831,71 @@ async function saveConfig() {
 
 // ==================== 数据操作（Supabase） ====================
 async function loadCharacters() {
-  if (!supabase) return [];
-  const { data, error } = await supabase.from('characters').select('*').order('created_at', { ascending: true });
+  if (!sbClient) return [];
+  const { data, error } = await sbClient.from('characters').select('*').order('created_at', { ascending: true });
   return data || [];
 }
 
 async function addCharacter(charData) {
-  if (!supabase) return null;
-  const { data, error } = await supabase.from('characters').insert([charData]).select().single();
+  if (!sbClient) return null;
+  const { data, error } = await sbClient.from('characters').insert([charData]).select().single();
   if (error) console.error('addCharacter error:', error);
   return data;
 }
 
 async function updateCharacter(id, updates) {
-  if (!supabase) return null;
-  const { data, error } = await supabase.from('characters').update({ ...updates, updated_at: new Date().toISOString() }).eq('id', id).select().single();
+  if (!sbClient) return null;
+  const { data, error } = await sbClient.from('characters').update({ ...updates, updated_at: new Date().toISOString() }).eq('id', id).select().single();
   if (error) console.error('updateCharacter error:', error);
   return data;
 }
 
 async function deleteCharacterById(id) {
-  if (!supabase) return;
-  const { error } = await supabase.from('characters').delete().eq('id', id);
+  if (!sbClient) return;
+  const { error } = await sbClient.from('characters').delete().eq('id', id);
   if (error) console.error('deleteCharacter error:', error);
 }
 
 async function loadSessions() {
-  if (!supabase) return [];
-  const { data, error } = await supabase.from('reading_sessions').select('*').order('created_at', { ascending: false });
+  if (!sbClient) return [];
+  const { data, error } = await sbClient.from('reading_sessions').select('*').order('created_at', { ascending: false });
   return data || [];
 }
 
 async function addSession(sessionData) {
-  if (!supabase) return null;
-  const { data, error } = await supabase.from('reading_sessions').insert([sessionData]).select().single();
+  if (!sbClient) return null;
+  const { data, error } = await sbClient.from('reading_sessions').insert([sessionData]).select().single();
   if (error) console.error('addSession error:', error);
   return data;
 }
 
 async function addForgetEvent(eventData) {
-  if (!supabase) return;
-  const { error } = await supabase.from('forget_events').insert([eventData]);
+  if (!sbClient) return;
+  const { error } = await sbClient.from('forget_events').insert([eventData]);
   if (error) console.error('addForgetEvent error:', error);
 }
 
 async function loadSettings() {
-  if (!supabase) return { reading_time: '10', word_count: '500-600', theme: '' };
-  const { data } = await supabase.from('app_settings').select('*').eq('id', 1).single();
+  if (!sbClient) return { reading_time: '10', word_count: '500-600', theme: '' };
+  const { data } = await sbClient.from('app_settings').select('*').eq('id', 1).single();
   return data || { reading_time: '10', word_count: '500-600', theme: '' };
 }
 
 async function saveSettingsToDB(settings) {
-  if (!supabase) return;
-  const { error } = await supabase.from('app_settings').upsert({ id: 1, ...settings, updated_at: new Date().toISOString() });
+  if (!sbClient) return;
+  const { error } = await sbClient.from('app_settings').upsert({ id: 1, ...settings, updated_at: new Date().toISOString() });
   if (error) console.error('saveSettings error:', error);
 }
 
 async function getCurrentStory() {
-  if (!supabase) return null;
-  const { data } = await supabase.from('current_story').select('*').eq('id', 1).single();
+  if (!sbClient) return null;
+  const { data } = await sbClient.from('current_story').select('*').eq('id', 1).single();
   return data;
 }
 
 async function saveCurrentStory(story) {
-  if (!supabase) return;
-  const { error } = await supabase.from('current_story').upsert({ id: 1, ...story, created_at: new Date().toISOString() });
+  if (!sbClient) return;
+  const { error } = await sbClient.from('current_story').upsert({ id: 1, ...story, created_at: new Date().toISOString() });
   if (error) console.error('saveStory error:', error);
 }
 
