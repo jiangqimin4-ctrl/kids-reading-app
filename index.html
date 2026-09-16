@@ -839,7 +839,10 @@ async function loadCharacters() {
 async function addCharacter(charData) {
   if (!sbClient) return null;
   const { data, error } = await sbClient.from('characters').insert([charData]).select().single();
-  if (error) console.error('addCharacter error:', error);
+  if (error) {
+    if (error.code === '23505') return null; // 重复键，静默忽略
+    console.error('addCharacter error:', error);
+  }
   return data;
 }
 
@@ -929,20 +932,24 @@ function openImportModal() { document.getElementById('modal-import-text').value 
 // ==================== 汉字操作 ====================
 async function addCharsToList(inputStr) {
   const chars = inputStr.replace(/\s+/g, '').split('').filter(c => /[\u4e00-\u9fa5]/.test(c));
+  // 去重
+  const uniqueChars = [...new Set(chars)];
   const existingChars = await loadCharacters();
+  const existingSet = new Set(existingChars.map(c => c.char));
   const added = [], existed = [];
   
-  for (const c of chars) {
-    const found = existingChars.find(x => x.char === c);
-    if (found) { existed.push(c); }
-    else {
-      await addCharacter({
+  for (const c of uniqueChars) {
+    if (existingSet.has(c)) {
+      existed.push(c);
+    } else {
+      const result = await addCharacter({
         char: c, status: '新认识', first_learned: new Date().toISOString().slice(0,10),
         review_count: 0, forget_count: 0, consecutive_correct: 0,
         last_review: null, last_correct: null, last_forget: null,
         target_words: []
       });
-      added.push(c);
+      if (result) added.push(c);
+      else existed.push(c); // 插入失败（可能是重复），算作已存在
     }
   }
   return { added, existed };
