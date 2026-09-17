@@ -601,22 +601,46 @@
   </div>
 </div>
 
-<!-- 阅读完成弹窗 -->
+<!-- 阅读模式弹窗 -->
+<div class="modal-overlay" id="modal-reader" style="background:#f8fafc;">
+  <div style="max-width:720px;width:92%;max-height:90vh;overflow-y:auto;background:#fff;border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,0.15);padding:0;position:relative;">
+    <!-- 顶部栏 -->
+    <div style="position:sticky;top:0;background:#fff;padding:16px 24px;border-bottom:1px solid #e2e8f0;display:flex;justify-content:space-between;align-items:center;z-index:10;">
+      <div>
+        <h2 id="reader-title" style="font-size:18px;font-weight:600;margin:0;color:var(--dark);">今日故事</h2>
+        <p id="reader-hint" style="font-size:13px;color:#94a3b8;margin:4px 0 0;">请孩子大声朗读下面的故事</p>
+      </div>
+      <button onclick="closeReader()" style="border:none;background:#f1f5f9;padding:8px 14px;border-radius:8px;cursor:pointer;font-size:14px;color:#64748b;">退出阅读</button>
+    </div>
+    
+    <!-- 故事正文 -->
+    <div id="reader-content" style="padding:28px 32px;font-size:22px;line-height:2;color:#334155;letter-spacing:1px;"></div>
+    
+    <!-- 底部操作栏 -->
+    <div style="position:sticky;bottom:0;background:#fff;padding:20px 24px;border-top:1px solid #e2e8f0;">
+      <div style="display:flex;gap:12px;align-items:center;">
+        <div style="flex:1;">
+          <label style="display:block;font-size:13px;font-weight:500;color:#64748b;margin-bottom:6px;">有不认识或忘记的字吗？</label>
+          <input class="input" id="reader-forget" placeholder="例如：轰、隆（没有就留空）" style="font-size:15px;">
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px;">
+          <label style="font-size:13px;color:#64748b;">阅读时间(分)</label>
+          <input type="number" id="reader-time" value="10" min="1" max="120" style="width:70px;text-align:center;border:1px solid #cbd5e1;border-radius:8px;padding:8px;font-size:15px;">
+        </div>
+      </div>
+      <button class="btn btn-success btn-full" onclick="completeReading()" style="margin-top:14px;font-size:16px;padding:14px;">✅ 完成本次阅读</button>
+      <p style="text-align:center;font-size:12px;color:#94a3b8;margin-top:10px;">💡 提示：同一个字连续读满3次且无遗忘记录，将自动升级为"稳定掌握"</p>
+    </div>
+  </div>
+</div>
+
+<!-- 阅读完成弹窗（简化版，阅读模式内已完成） -->
 <div class="modal-overlay" id="modal-complete">
   <div class="modal">
-    <h2>🎉 完成今天的阅读！</h2>
-    <p>太棒了！请记录一下今天的情况：</p>
-    <div style="margin-bottom:16px;">
-      <label style="display:block;font-weight:500;color:var(--dark);margin-bottom:8px;">阅读时间（分钟）</label>
-      <input type="number" class="input" id="complete-time" value="10" min="1" max="120">
-    </div>
-    <div style="margin-bottom:16px;">
-      <label style="display:block;font-weight:500;color:var(--dark);margin-bottom:8px;">有不认识或忘记的字吗？</label>
-      <input class="input" id="complete-forget" placeholder="例如：轰、隆（没有就留空）">
-    </div>
+    <h2>🎉 阅读完成！</h2>
+    <div id="complete-result" style="margin:16px 0;"></div>
     <div class="modal-actions">
-      <button class="btn btn-outline" onclick="closeModal('modal-complete')">继续阅读</button>
-      <button class="btn btn-success" onclick="completeReading()">确认完成</button>
+      <button class="btn btn-primary" onclick="closeModal('modal-complete')">好的</button>
     </div>
   </div>
 </div>
@@ -1178,7 +1202,9 @@ async function generateStory() {
     
     const story = generateStoryText(theme, [...targetChars, ...forgotChars]);
     
-    await saveCurrentStory({ title: theme, content: story, word_count: story.replace(/\s/g,'').length });
+    // 保存到内存和云端
+    currentReadingStory = { title: theme, content: story, word_count: story.replace(/\s/g,'').length };
+    await saveCurrentStory(currentReadingStory);
     
     document.getElementById('story-text').innerHTML = story.split('\n').map(p => `<p>${p}</p>`).join('');
     document.getElementById('story-output').style.display = 'block';
@@ -1315,38 +1341,108 @@ function generateStoryText(theme, chars) {
   return story.trim();
 }
 
+// 当前阅读的故事（内存缓存，避免DB查询问题）
+let currentReadingStory = null;
+
 async function openReader() {
-  const story = await getCurrentStory();
-  if (!story) { showToast('请先生成故事', 'error'); return; }
-  openModal('modal-complete');
+  // 优先用内存中的故事
+  let story = currentReadingStory;
+  if (!story) {
+    story = await getCurrentStory();
+  }
+  if (!story || !story.content) { 
+    // 尝试从页面上的故事文本获取
+    const storyText = document.getElementById('story-text');
+    if (storyText && storyText.innerHTML) {
+      story = { title: '今日故事', content: storyText.innerText || storyText.textContent };
+    } else {
+      showToast('请先生成故事', 'error'); 
+      return; 
+    }
+  }
+  
+  currentReadingStory = story;
+  
+  // 填充阅读模式
+  document.getElementById('reader-title').textContent = story.title || '今日故事';
+  
+  // 将故事按段落显示
+  const contentEl = document.getElementById('reader-content');
+  const paragraphs = story.content.split('\n').filter(p => p.trim());
+  contentEl.innerHTML = paragraphs.map(p => `<p style="margin:0 0 20px;text-indent:2em;">${p.trim()}</p>`).join('');
+  
+  // 清空遗忘输入
+  const readerForget = document.getElementById('reader-forget');
+  if (readerForget) readerForget.value = '';
+  
+  openModal('modal-reader');
+}
+
+function closeReader() {
+  closeModal('modal-reader');
 }
 
 async function completeReading() {
-  const time = parseInt(document.getElementById('complete-time').value) || 10;
-  const forgetInput = document.getElementById('complete-forget').value;
+  const timeInput = document.getElementById('reader-time') || document.getElementById('complete-time');
+  const forgetInputEl = document.getElementById('reader-forget') || document.getElementById('complete-forget');
+  const time = parseInt(timeInput?.value) || 10;
+  const forgetInput = forgetInputEl?.value || '';
   const chars = await loadCharacters();
-  const settings = await loadSettings();
   
+  // 解析遗忘的字
+  const forgetChars = forgetInput.replace(/\s+/g,'').split('').filter(c => /[\u4e00-\u9fa5]/.test(c));
+  
+  // 保存阅读记录
+  const storyTitle = currentReadingStory?.title || (await getCurrentStory())?.title || '阅读故事';
   const session = {
-    title: (await getCurrentStory())?.title || '阅读故事',
+    title: storyTitle,
     session_date: new Date().toISOString().slice(0,10),
     reading_time: time,
-    word_count: (await getCurrentStory())?.word_count || 0,
+    word_count: currentReadingStory?.word_count || 0,
     new_chars: chars.filter(c => c.status === '新认识').slice(-5).map(c => c.char),
-    forget_chars: forgetInput.replace(/\s+/g,'').split('').filter(c => /[\u4e00-\u9fa5]/.test(c))
+    forget_chars: forgetChars
   };
-  
   await addSession(session);
   
-  // 更新汉字状态
-  for (const c of chars) {
-    if (session.new_chars.includes(c.char)) {
-      const newRC = (c.review_count || 0) + 1;
-      const newCC = (c.consecutive_correct || 0) + 1;
-      const newStatus = newCC >= 5 ? '稳定掌握' : (newCC >= 2 ? '初步掌握' : c.status);
-      await updateCharacter(c.id, {
-        review_count: newRC,
-        consecutive_correct: newCC,
+  // === 核心逻辑：更新汉字状态 ===
+  const forgetSet = new Set(forgetChars);
+  const promotedChars = [];
+  const forgotRecorded = [];
+  
+  for (const ch of chars) {
+    const c = ch.char;
+    
+    if (forgetSet.has(c)) {
+      // 被标记为遗忘了
+      const newForgetCount = (ch.forget_count || 0) + 1;
+      const newStatus = newForgetCount >= 3 ? '容易遗忘' : (newForgetCount >= 1 ? '重点巩固' : ch.status);
+      await updateCharacter(ch.id, {
+        forget_count: newForgetCount,
+        consecutive_correct: 0,
+        last_forget: session.session_date,
+        status: newStatus
+      });
+      await addForgetEvent({ char: c, count: newForgetCount });
+      forgotRecorded.push(c);
+    } else {
+      // 没有被标记遗忘 → 增加复习次数和连续正确次数
+      const newReviewCount = (ch.review_count || 0) + 1;
+      const newConsecutive = (ch.consecutive_correct || 0) + 1;
+      
+      // 判断是否应该升级：连续3次正确且无遗忘 + 总复习>=3次
+      let newStatus = ch.status;
+      if (newConsecutive >= 3 && newReviewCount >= 3 && (ch.forget_count || 0) === 0) {
+        if (ch.status !== '稳定掌握') {
+          newStatus = '稳定掌握';
+          promotedChars.push(c);
+        }
+      } else if (ch.status === '新认识' && newReviewCount >= 1) {
+        newStatus = '重点巩固';
+      }
+      
+      await updateCharacter(ch.id, {
+        review_count: newReviewCount,
+        consecutive_correct: newConsecutive,
         last_review: session.session_date,
         last_correct: session.session_date,
         status: newStatus
@@ -1354,36 +1450,35 @@ async function completeReading() {
     }
   }
   
-  // 处理遗忘字
-  if (forgetInput.trim()) {
-    const fchars = forgetInput.replace(/\s+/g,'').split('').filter(c => /[\u4e00-\u9fa5]/.test(c));
-    for (const c of fchars) {
-      const found = chars.find(x => x.char === c);
-      if (found) {
-        const newFC = (found.forget_count || 0) + 1;
-        await updateCharacter(found.id, {
-          forget_count: newFC,
-          consecutive_correct: 0,
-          last_forget: session.session_date
-        });
-        await addForgetEvent({ char: c, count: newFC });
-      } else {
-        await addCharacter({
-          char:c, status:'容易遗忘', first_learned:session.session_date,
-          review_count:0, forget_count:1, consecutive_correct:0,
-          last_review:null, last_correct:null, last_forget:session.session_date,
-          target_words:[]
-        });
-        await addForgetEvent({ char: c, count: 1 });
-      }
-    }
+  // 关闭阅读模式
+  closeReader();
+  
+  // 显示完成结果
+  const resultEl = document.getElementById('complete-result');
+  let resultHTML = `<p style="font-size:15px;color:#334155;margin-bottom:12px;">📖 本次阅读 <strong>${time}</strong> 分钟</p>`;
+  
+  if (promotedChars.length > 0) {
+    resultHTML += `<p style="font-size:15px;color:#059669;margin-bottom:8px;">🎉 恭喜！以下 <strong>${promotedChars.length}</strong> 个字升级为<strong>稳定掌握</strong>：${promotedChars.map(c => `<span class="tag tag-green" style="margin:2px">${c}</span>`).join('')}</p>`;
   }
   
-  closeModal('modal-complete');
-  showToast(`🎉 阅读记录已保存！本次阅读 ${time} 分钟`);
+  if (forgotRecorded.length > 0) {
+    resultHTML += `<p style="font-size:15px;color:#d97706;margin-bottom:8px;">⚠️ 以下 <strong>${forgotRecorded.length}</strong> 个字被记录为遗忘：${forgotRecorded.map(c => `<span class="tag tag-orange" style="margin:2px">${c}</span>`).join('')}</p>`;
+  }
+  
+  if (promotedChars.length === 0 && forgotRecorded.length === 0) {
+    resultHTML += `<p style="font-size:15px;color:#64748b;">继续坚持阅读！再读几次就可以升级啦！💪</p>`;
+  }
+  
+  resultEl.innerHTML = resultHTML;
+  openModal('modal-complete');
+  
+  // 清理
   document.getElementById('story-output').style.display = 'none';
-  document.getElementById('complete-forget').value = '';
-  refreshDashboard(); refreshHistory();
+  if (forgetInputEl) forgetInputEl.value = '';
+  
+  refreshDashboard(); 
+  refreshCharTable();
+  showToast(`🎉 阅读完成！${time}分钟${promotedChars.length > 0 ? `，${promotedChars.length}个字升级` : ''}`);
 }
 
 // ==================== 阅读历史 ====================
